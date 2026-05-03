@@ -4,16 +4,16 @@
     <meta charset="UTF-8">
     <title>NÃO DEIXE ELE TE PEGAR</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #050505; font-family: 'Courier New', Courier, monospace; }
+        body { margin: 0; overflow: hidden; background: #050505; font-family: 'Courier New', Courier, monospace; touch-action: none; }
         #gameCanvas { display: block; filter: contrast(1.2) brightness(0.8); }
         
         #ui { 
             position: absolute; top: 20px; left: 20px; color: #ff0000; 
             font-size: 18px; text-transform: uppercase; letter-spacing: 2px;
             z-index: 10;
+            pointer-events: none;
         }
 
-        /* Estilo do Jumpscare */
         #jumpscare {
             display: none;
             position: fixed;
@@ -48,7 +48,6 @@
         const ctx = canvas.getContext('2d');
         const jumpscareDiv = document.getElementById('jumpscare');
 
-        // Carregar som
         const somSusto = new Audio('grito.mp3');
 
         canvas.width = window.innerWidth;
@@ -76,7 +75,6 @@
 
         const finishLine = { x: canvas.width - 100, y: canvas.height - 100, size: 60 };
 
-        // Obstáculos fixos
         const walls = [
             { x: 300, y: 0, w: 40, h: 400 },
             { x: 600, y: 300, w: 40, h: 500 },
@@ -88,6 +86,35 @@
         window.addEventListener('keydown', e => keys[e.code] = true);
         window.addEventListener('keyup', e => keys[e.code] = false);
 
+        // --- SUPORTE AO TOUCH ---
+        function handleTouch(e) {
+            if (gameOver) return;
+            // Previne o scroll da página enquanto joga
+            e.preventDefault();
+            
+            const touch = e.touches[0];
+            const touchX = touch.clientX;
+            const touchY = touch.clientY;
+
+            // Calcula a direção do toque em relação ao jogador
+            const dx = touchX - player.x;
+            const dy = touchY - player.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            // Move o jogador na direção do dedo se o toque não for em cima dele
+            if (dist > 5) {
+                let nextX = player.x + (dx / dist) * player.speed;
+                let nextY = player.y + (dy / dist) * player.speed;
+
+                if (!checkWall(nextX, player.y)) player.x = nextX;
+                if (!checkWall(player.x, nextY)) player.y = nextY;
+            }
+        }
+
+        canvas.addEventListener('touchstart', handleTouch, { passive: false });
+        canvas.addEventListener('touchmove', handleTouch, { passive: false });
+        // -------------------------
+
         function checkWall(nx, ny) {
             return walls.some(w => nx > w.x && nx < w.x + w.w && ny > w.y && ny < w.y + w.h);
         }
@@ -95,24 +122,17 @@
         function triggerJumpscare() {
             if (gameOver) return;
             gameOver = true;
-            
-            // Tocar som
-            somSusto.play().catch(e => console.log("Clique na tela para habilitar áudio"));
-            
+            somSusto.play().catch(e => console.log("Áudio bloqueado pelo navegador"));
             jumpscareDiv.style.display = 'block';
-            
-            setTimeout(() => {
-                location.reload();
-            }, 2000);
+            setTimeout(() => { location.reload(); }, 2000);
         }
 
         function update() {
             if (gameOver) return;
 
-            // Movimentação com detecção de parede
+            // Movimentação Teclado
             let nextX = player.x;
             let nextY = player.y;
-
             if ((keys['ArrowUp'] || keys['KeyW'])) nextY -= player.speed;
             if ((keys['ArrowDown'] || keys['KeyS'])) nextY += player.speed;
             if ((keys['ArrowLeft'] || keys['KeyA'])) nextX -= player.speed;
@@ -123,28 +143,21 @@
                 player.y = nextY;
             }
 
-            // IA do Monstro (segue o jogador e tenta desviar de paredes)
-            const dx = player.x - (monster.x + monster.width/2);
-            const dy = player.y - (monster.y + monster.height/2);
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            
-            let moveX = (dx / dist) * monster.speed;
-            let moveY = (dy / dist) * monster.speed;
+            // IA do Monstro
+            const mdx = player.x - (monster.x + monster.width/2);
+            const mdy = player.y - (monster.y + monster.height/2);
+            const mdist = Math.sqrt(mdx * mdx + mdy * mdy);
+            let moveX = (mdx / mdist) * monster.speed;
+            let moveY = (mdy / mdist) * monster.speed;
 
-            if (!checkWall(monster.x + moveX + monster.width/2, monster.y + monster.height/2)) {
-                monster.x += moveX;
-            }
-            if (!checkWall(monster.x + monster.width/2, monster.y + moveY + monster.height/2)) {
-                monster.y += moveY;
-            }
+            if (!checkWall(monster.x + moveX + monster.width/2, monster.y + monster.height/2)) monster.x += moveX;
+            if (!checkWall(monster.x + monster.width/2, monster.y + moveY + monster.height/2)) monster.y += moveY;
 
-            // Colisão com monstro
             if (player.x > monster.x && player.x < monster.x + monster.width &&
                 player.y > monster.y && player.y < monster.y + monster.height) {
                 triggerJumpscare();
             }
 
-            // Vitória
             if (player.x > finishLine.x && player.x < finishLine.x + finishLine.size &&
                 player.y > finishLine.y && player.y < finishLine.y + finishLine.size) {
                 alert("VOCÊ ESCAPOU!");
@@ -154,32 +167,21 @@
 
         function draw() {
             if (gameOver) return;
-
             ctx.fillStyle = 'black';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Desenhar Portal de Vitória
             ctx.fillStyle = '#00ff00';
             ctx.fillRect(finishLine.x, finishLine.y, finishLine.size, finishLine.size);
-
-            // Desenhar Paredes
             ctx.fillStyle = '#1a1a1a';
             walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
-
-            // Rastro de luz (Lanterna)
             const gradient = ctx.createRadialGradient(player.x, player.y, 10, player.x, player.y, 350);
             gradient.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
             gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Desenhar Jogador
             ctx.fillStyle = player.color;
             ctx.beginPath();
             ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
             ctx.fill();
-
-            // Desenhar Monstro
             ctx.drawImage(monster.img, monster.x, monster.y, monster.width, monster.height);
         }
 
@@ -189,9 +191,7 @@
             if (!gameOver) requestAnimationFrame(gameLoop);
         }
 
-        monster.img.onload = () => {
-            gameLoop();
-        };
+        monster.img.onload = () => { gameLoop(); };
 
         window.onresize = () => {
             canvas.width = window.innerWidth;
