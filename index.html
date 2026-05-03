@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>NÃO DEIXE ELE TE PEGAR</title>
+    <title>NÃO DEIXE ELE TE PEGAR - 6 CHAVES & BORDAS</title>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; font-family: 'Courier New', Courier, monospace; touch-action: none; }
         #gameCanvas { display: block; filter: contrast(1.2) brightness(0.8); }
@@ -27,7 +27,7 @@
     </style>
 </head>
 <body>
-    <div id="ui">Fuja para o portal verde. Ele está caçando você...</div>
+    <div id="ui">Colete as 6 chaves para abrir o portal!</div>
     <div id="jumpscare"><img src="monstro.jpg" alt="MORTE"></div>
     <canvas id="gameCanvas"></canvas>
 
@@ -36,17 +36,17 @@
         const ctx = canvas.getContext('2d');
         const jumpscareDiv = document.getElementById('jumpscare');
 
-        // --- CONFIGURAÇÃO DE ÁUDIO ---
         const somSusto = new Audio('grito.mp3');
         const musicaFundo = new Audio('musica_fundo.mp3');
-        musicaFundo.loop = true; // Faz a música repetir sempre
-        musicaFundo.volume = 0.4; // Deixa o fundo um pouco mais baixo que o susto
+        musicaFundo.loop = true;
+        musicaFundo.volume = 0.4;
+        somSusto.preload = 'auto';
 
-        let audioIniciado = false;
-        function iniciarAudio() {
-            if (!audioIniciado) {
-                musicaFundo.play().catch(e => console.log("Áudio aguardando interação"));
-                audioIniciado = true;
+        let audioContextIniciado = false;
+        async function iniciarAudio() {
+            if (!audioContextIniciado) {
+                musicaFundo.play().catch(() => {});
+                audioContextIniciado = true;
             }
         }
 
@@ -56,36 +56,53 @@
         let gameOver = false;
         let touchActive = false;
         let touchTarget = { x: 0, y: 0 };
+        let chavesColetadas = 0;
 
-        const player = { x: 50, y: 50, size: 18, speed: 6, color: '#ffffff' };
+        const player = { x: 50, y: 50, size: 16, speed: 6, color: '#ffffff' };
+        
         const monster = {
             x: canvas.width - 200,
             y: canvas.height - 200,
-            width: 150,
-            height: 180,
-            speed: 4.6, 
+            width: 80, 
+            height: 100,
+            speed: 4.9, 
             img: new Image()
         };
         monster.img.src = 'monstro.jpg';
 
-        const finishLine = { x: canvas.width - 100, y: canvas.height - 100, size: 60 };
+        const finishLine = { x: canvas.width - 100, y: canvas.height - 100, size: 70 };
+
+        const wallT = 18; 
         const walls = [
-            { x: 300, y: 0, w: 40, h: 400 },
-            { x: 600, y: 300, w: 40, h: 500 },
-            { x: 900, y: 0, w: 40, h: 450 },
-            { x: 0, y: 550, w: 400, h: 40 }
+            { x: 250, y: 0, w: wallT, h: 400 },
+            { x: 500, y: 200, w: wallT, h: 500 },
+            { x: 750, y: 0, w: wallT, h: 350 },
+            { x: 1000, y: 300, w: wallT, h: 500 },
+            { x: 0, y: 500, w: 300, h: wallT },
+            { x: 600, y: 150, w: 250, h: wallT },
+            { x: 850, y: 550, w: 300, h: wallT },
+            { x: 150, y: 250, w: 100, h: wallT }
         ];
 
-        const keys = {};
-        window.addEventListener('keydown', e => {
-            keys[e.code] = true;
-            iniciarAudio(); // Inicia a música no primeiro toque de tecla
+        const keysObj = [
+            { x: 350, y: 80, coletada: false },
+            { x: 100, y: canvas.height - 100, coletada: false },
+            { x: 850, y: 100, coletada: false },
+            { x: canvas.width - 150, y: 80, coletada: false },
+            { x: 550, y: 450, coletada: false },
+            { x: canvas.width - 50, y: canvas.height - 300, coletada: false }
+        ];
+
+        const inputKeys = {};
+        window.addEventListener('keydown', e => { 
+            inputKeys[e.code] = true; 
+            iniciarAudio(); 
         });
-        window.addEventListener('keyup', e => keys[e.code] = false);
+        window.addEventListener('keyup', e => inputKeys[e.code] = false);
 
         canvas.addEventListener('touchstart', e => {
             touchActive = true;
-            iniciarAudio(); // Inicia a música no primeiro toque na tela
+            iniciarAudio();
             updateTouch(e);
         }, { passive: false });
 
@@ -98,29 +115,30 @@
             touchTarget.y = e.touches[0].clientY;
         }
 
-        function checkWall(nx, ny) {
+        function checkWall(nx, ny, w_obj, h_obj) {
             return walls.some(w => 
-                nx + player.size > w.x && nx - player.size < w.x + w.w && 
-                ny + player.size > w.y && ny - player.size < w.y + w.h
+                nx < w.x + w.w && nx + w_obj > w.x &&
+                ny < w.y + w.h && ny + h_obj > w.y
             );
         }
 
         function triggerJumpscare() {
             if (gameOver) return;
             gameOver = true;
-            musicaFundo.pause(); // Para a música de fundo para destacar o grito
-            somSusto.play().catch(e => {});
+            musicaFundo.pause();
+            somSusto.currentTime = 0;
+            somSusto.play();
             jumpscareDiv.style.display = 'block';
-            setTimeout(() => { location.reload(); }, 2000);
+            setTimeout(() => { location.reload(); }, 2500);
         }
 
         function update() {
             if (gameOver) return;
             let moveX = 0, moveY = 0;
-            if (keys['ArrowUp'] || keys['KeyW']) moveY -= player.speed;
-            if (keys['ArrowDown'] || keys['KeyS']) moveY += player.speed;
-            if (keys['ArrowLeft'] || keys['KeyA']) moveX -= player.speed;
-            if (keys['ArrowRight'] || keys['KeyD']) moveX += player.speed;
+            if (inputKeys['ArrowUp'] || inputKeys['KeyW']) moveY -= player.speed;
+            if (inputKeys['ArrowDown'] || inputKeys['KeyS']) moveY += player.speed;
+            if (inputKeys['ArrowLeft'] || inputKeys['KeyA']) moveX -= player.speed;
+            if (inputKeys['ArrowRight'] || inputKeys['KeyD']) moveX += player.speed;
 
             if (touchActive) {
                 const dx = touchTarget.x - player.x;
@@ -133,8 +151,18 @@
                 }
             }
 
-            if (!checkWall(player.x + moveX, player.y)) player.x += moveX;
-            if (!checkWall(player.x, player.y + moveY)) player.y += moveY;
+            if (!checkWall(player.x + moveX - player.size, player.y - player.size, player.size*2, player.size*2)) player.x += moveX;
+            if (!checkWall(player.x - player.size, player.y + moveY - player.size, player.size*2, player.size*2)) player.y += moveY;
+
+            keysObj.forEach(k => {
+                if (!k.coletada) {
+                    const distK = Math.sqrt((player.x - k.x)**2 + (player.y - k.y)**2);
+                    if (distK < 30) {
+                        k.coletada = true;
+                        chavesColetadas++;
+                    }
+                }
+            });
 
             const mdx = player.x - (monster.x + monster.width/2);
             const mdy = player.y - (monster.y + monster.height/2);
@@ -142,18 +170,24 @@
             let mMoveX = (mdx / mdist) * monster.speed;
             let mMoveY = (mdy / mdist) * monster.speed;
 
-            if (!checkWall(monster.x + mMoveX + monster.width/2, monster.y + monster.height/2)) monster.x += mMoveX;
-            if (!checkWall(monster.x + monster.width/2, monster.y + mMoveY + monster.height/2)) monster.y += mMoveY;
+            if (!checkWall(monster.x + mMoveX, monster.y, monster.width, monster.height)) monster.x += mMoveX;
+            if (!checkWall(monster.x, monster.y + mMoveY, monster.width, monster.height)) monster.y += mMoveY;
 
-            if (player.x + player.size > monster.x && player.x - player.size < monster.x + monster.width &&
-                player.y + player.size > monster.y && player.y - player.size < monster.y + monster.height) {
+            if (player.x + player.size > monster.x + 15 && player.x - player.size < monster.x + monster.width - 15 &&
+                player.y + player.size > monster.y + 15 && player.y - player.size < monster.y + monster.height - 15) {
                 triggerJumpscare();
             }
 
-            if (player.x > finishLine.x && player.x < finishLine.x + finishLine.size &&
-                player.y > finishLine.y && player.y < finishLine.y + finishLine.size) {
-                alert("VOCÊ ESCAPOU!");
-                location.reload();
+            if (chavesColetadas === 6) {
+                document.getElementById('ui').innerText = "PORTAL LIBERADO! CORRA!";
+                document.getElementById('ui').style.color = "#00ff00";
+                if (player.x > finishLine.x && player.x < finishLine.x + finishLine.size &&
+                    player.y > finishLine.y && player.y < finishLine.y + finishLine.size) {
+                    alert("VOCÊ SOBREVIVEU!");
+                    location.reload();
+                }
+            } else {
+                document.getElementById('ui').innerText = `CHAVES: ${chavesColetadas} / 6`;
             }
         }
 
@@ -161,14 +195,38 @@
             if (gameOver) return;
             ctx.fillStyle = 'black';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#00ff00';
-            ctx.fillRect(finishLine.x, finishLine.y, finishLine.size, finishLine.size);
-            ctx.fillStyle = '#1a1a1a';
-            walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
             
-            const gradient = ctx.createRadialGradient(player.x, player.y, 10, player.x, player.y, 350);
-            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
-            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            // Portal
+            ctx.strokeStyle = chavesColetadas === 6 ? '#00ff00' : '#333';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.roundRect(finishLine.x, finishLine.y, finishLine.size, finishLine.size, 10);
+            ctx.stroke();
+            
+            // --- PAREDES COM BORDAS ARREDONDADAS ---
+            ctx.fillStyle = '#1a1a1a';
+            walls.forEach(w => {
+                ctx.beginPath();
+                // O valor 8 define o quão arredondada é a borda
+                ctx.roundRect(w.x, w.y, w.w, w.h, 8);
+                ctx.fill();
+            });
+            
+            keysObj.forEach(k => {
+                if (!k.coletada) {
+                    ctx.fillStyle = 'gold';
+                    ctx.beginPath();
+                    ctx.arc(k.x, k.y, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = "gold";
+                }
+            });
+            ctx.shadowBlur = 0;
+
+            const gradient = ctx.createRadialGradient(player.x, player.y, 5, player.x, player.y, 280);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.15)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0.95)');
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
@@ -176,6 +234,7 @@
             ctx.beginPath();
             ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
             ctx.fill();
+            
             ctx.drawImage(monster.img, monster.x, monster.y, monster.width, monster.height);
         }
 
