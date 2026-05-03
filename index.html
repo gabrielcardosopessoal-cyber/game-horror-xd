@@ -27,7 +27,7 @@
     </style>
 </head>
 <body>
-    <div id="ui">Fuja para o portal verde.ELE ESTÁ PERTO.</div>
+    <div id="ui">Fuja para o portal verde. Ele está caçando você...</div>
     <div id="jumpscare"><img src="monstro.jpg" alt="MORTE"></div>
     <canvas id="gameCanvas"></canvas>
 
@@ -35,7 +35,20 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const jumpscareDiv = document.getElementById('jumpscare');
+
+        // --- CONFIGURAÇÃO DE ÁUDIO ---
         const somSusto = new Audio('grito.mp3');
+        const musicaFundo = new Audio('musica_fundo.mp3');
+        musicaFundo.loop = true; // Faz a música repetir sempre
+        musicaFundo.volume = 0.4; // Deixa o fundo um pouco mais baixo que o susto
+
+        let audioIniciado = false;
+        function iniciarAudio() {
+            if (!audioIniciado) {
+                musicaFundo.play().catch(e => console.log("Áudio aguardando interação"));
+                audioIniciado = true;
+            }
+        }
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -44,14 +57,7 @@
         let touchActive = false;
         let touchTarget = { x: 0, y: 0 };
 
-        const player = {
-            x: 50,
-            y: 50,
-            size: 18, // Aumentado conforme solicitado
-            speed: 6,
-            color: '#ffffff'
-        };
-
+        const player = { x: 50, y: 50, size: 18, speed: 6, color: '#ffffff' };
         const monster = {
             x: canvas.width - 200,
             y: canvas.height - 200,
@@ -63,7 +69,6 @@
         monster.img.src = 'monstro.jpg';
 
         const finishLine = { x: canvas.width - 100, y: canvas.height - 100, size: 60 };
-
         const walls = [
             { x: 300, y: 0, w: 40, h: 400 },
             { x: 600, y: 300, w: 40, h: 500 },
@@ -72,22 +77,20 @@
         ];
 
         const keys = {};
-        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            iniciarAudio(); // Inicia a música no primeiro toque de tecla
+        });
         window.addEventListener('keyup', e => keys[e.code] = false);
 
-        // --- SISTEMA DE TOQUE DE ALTA PRECISÃO ---
         canvas.addEventListener('touchstart', e => {
             touchActive = true;
+            iniciarAudio(); // Inicia a música no primeiro toque na tela
             updateTouch(e);
         }, { passive: false });
 
-        canvas.addEventListener('touchmove', e => {
-            updateTouch(e);
-        }, { passive: false });
-
-        canvas.addEventListener('touchend', () => {
-            touchActive = false;
-        });
+        canvas.addEventListener('touchmove', e => updateTouch(e), { passive: false });
+        canvas.addEventListener('touchend', () => touchActive = false);
 
         function updateTouch(e) {
             e.preventDefault();
@@ -96,18 +99,16 @@
         }
 
         function checkWall(nx, ny) {
-            // Colisão considerando o raio da bolinha para não "entrar" na parede
             return walls.some(w => 
-                nx + player.size > w.x && 
-                nx - player.size < w.x + w.w && 
-                ny + player.size > w.y && 
-                ny - player.size < w.y + w.h
+                nx + player.size > w.x && nx - player.size < w.x + w.w && 
+                ny + player.size > w.y && ny - player.size < w.y + w.h
             );
         }
 
         function triggerJumpscare() {
             if (gameOver) return;
             gameOver = true;
+            musicaFundo.pause(); // Para a música de fundo para destacar o grito
             somSusto.play().catch(e => {});
             jumpscareDiv.style.display = 'block';
             setTimeout(() => { location.reload(); }, 2000);
@@ -115,11 +116,7 @@
 
         function update() {
             if (gameOver) return;
-
-            let moveX = 0;
-            let moveY = 0;
-
-            // Lógica combinada (Teclado + Touch)
+            let moveX = 0, moveY = 0;
             if (keys['ArrowUp'] || keys['KeyW']) moveY -= player.speed;
             if (keys['ArrowDown'] || keys['KeyS']) moveY += player.speed;
             if (keys['ArrowLeft'] || keys['KeyA']) moveX -= player.speed;
@@ -129,37 +126,30 @@
                 const dx = touchTarget.x - player.x;
                 const dy = touchTarget.y - player.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                
                 if (dist > 5) {
-                    // Normaliza e aplica velocidade baseada na distância (suaviza o movimento)
                     const touchSpeed = Math.min(player.speed, dist / 10);
                     moveX = (dx / dist) * touchSpeed;
                     moveY = (dy / dist) * touchSpeed;
                 }
             }
 
-            // Aplica movimento com detecção de colisão individual por eixo para deslizar nas paredes
             if (!checkWall(player.x + moveX, player.y)) player.x += moveX;
             if (!checkWall(player.x, player.y + moveY)) player.y += moveY;
 
-            // IA do Monstro
             const mdx = player.x - (monster.x + monster.width/2);
             const mdy = player.y - (monster.y + monster.height/2);
             const mdist = Math.sqrt(mdx * mdx + mdy * mdy);
-            
             let mMoveX = (mdx / mdist) * monster.speed;
             let mMoveY = (mdy / mdist) * monster.speed;
 
             if (!checkWall(monster.x + mMoveX + monster.width/2, monster.y + monster.height/2)) monster.x += mMoveX;
             if (!checkWall(monster.x + monster.width/2, monster.y + mMoveY + monster.height/2)) monster.y += mMoveY;
 
-            // Detecção de morte
             if (player.x + player.size > monster.x && player.x - player.size < monster.x + monster.width &&
                 player.y + player.size > monster.y && player.y - player.size < monster.y + monster.height) {
                 triggerJumpscare();
             }
 
-            // Chegada
             if (player.x > finishLine.x && player.x < finishLine.x + finishLine.size &&
                 player.y > finishLine.y && player.y < finishLine.y + finishLine.size) {
                 alert("VOCÊ ESCAPOU!");
@@ -171,29 +161,21 @@
             if (gameOver) return;
             ctx.fillStyle = 'black';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Portal
             ctx.fillStyle = '#00ff00';
             ctx.fillRect(finishLine.x, finishLine.y, finishLine.size, finishLine.size);
-            
-            // Paredes
             ctx.fillStyle = '#1a1a1a';
             walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
             
-            // Efeito de Lanterna
             const gradient = ctx.createRadialGradient(player.x, player.y, 10, player.x, player.y, 350);
             gradient.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
             gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Player
             ctx.fillStyle = player.color;
             ctx.beginPath();
             ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
             ctx.fill();
-            
-            // Monstro
             ctx.drawImage(monster.img, monster.x, monster.y, monster.width, monster.height);
         }
 
@@ -204,7 +186,6 @@
         }
 
         monster.img.onload = () => { gameLoop(); };
-
         window.onresize = () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
